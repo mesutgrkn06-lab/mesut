@@ -1,4 +1,4 @@
-name: Mola 4.2 APK and AAB build test
+name: Mola 4.2 separate Play listing build
 on:
   push:
     paths:
@@ -160,7 +160,7 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
       - name: Compile debug app with candidate
-        run: bash gradlew :fermata:assembleAutoDebug :fermata:bundleAutoDebug -PAPP_ID=com.nexvory --no-daemon --stacktrace
+        run: bash gradlew :fermata:assembleAutoDebug :fermata:bundleAutoDebug -PAPP_ID=com.nexvory.mola42 --no-daemon --stacktrace
       - name: Check release signing credentials
         env:
           STORE_B64: ${{ secrets.MOLA_KEYSTORE_BASE64 }}
@@ -179,7 +179,7 @@ jobs:
       - name: Prepare signed Play Console release
         if: ${{ env.HAS_SIGNING == 'true' }}
         run: |
-          bash gradlew :fermata:bundleAutoRelease -PAPP_ID=com.nexvory --no-daemon --stacktrace
+          bash gradlew :fermata:bundleAutoRelease -PAPP_ID=com.nexvory.mola42 --no-daemon --stacktrace
         env:
           FERMATAX_STORE_FILE: ${{ runner.temp }}/mola-upload.jks
           FERMATAX_STORE_PASSWORD: ${{ secrets.MOLA_STORE_PASSWORD }}
