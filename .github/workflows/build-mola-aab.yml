@@ -24,15 +24,34 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
-      - name: Verify source configuration
+      - name: Prepare upload signing
+        env:
+          SIGNING_KEY: ${{ secrets.MOLA_KEYSTORE_B64 }}
+          SIGNING_PASSWORD: ${{ secrets.MOLA_STORE_PASSWORD }}
         run: |
-          grep -n 'applicationIdSuffix' fermata/build.gradle
-          grep -n 'VERSION_NAME' gradle.properties || true
-      - name: Build debug bundle to verify source
-        run: bash gradlew :fermata:bundleAutoDebug -PAPP_ID=com.nexvory --no-daemon
-      - name: Upload debug AAB for build verification
+          test -n "$SIGNING_KEY" && test -n "$SIGNING_PASSWORD"
+          printf '%s' "$SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/mola.jks"
+          echo "FERMATAX_STORE_FILE=$RUNNER_TEMP/mola.jks" >> "$GITHUB_ENV"
+          echo "FERMATAX_STORE_PASSWORD=$SIGNING_PASSWORD" >> "$GITHUB_ENV"
+          echo "FERMATAX_KEY_ALIAS=mola" >> "$GITHUB_ENV"
+          echo "FERMATAX_KEY_PASSWORD=$SIGNING_PASSWORD" >> "$GITHUB_ENV"
+          python3 - <<'PY'
+          from pathlib import Path
+          f = Path('fermata/build.gradle')
+          s = f.read_text()
+          s = s.replace("configuredApplicationId + '.auto' + configuredAutoIdSuffix", "configuredApplicationId + '.mola' + configuredAutoIdSuffix")
+          s = s.replace("applicationIdSuffix '.auto' + project.getProperties()", "applicationIdSuffix '.mola' + project.getProperties()")
+          f.write_text(s)
+          f = Path('settings.gradle')
+          s = f.read_text()
+          s = s.replace("'a86d576ff1ec0e3245f5a6152c5d8d66b5df8bb510820d75dc61110b19c3aeb4'", "'a86d576ff1ec0e3245f5a6152c5d8d66b5df8bb510820d75dc61110b19c3aeb4', '6d0bc1e0d7ea1212aba1a4ada9eae99f8e8b6d832c1be0e5117171cffa088f5e'")
+          f.write_text(s)
+          PY
+      - name: Build signed release bundle
+        run: bash gradlew :fermata:bundleAutoRelease -PAPP_ID=com.nexvory --no-daemon
+      - name: Upload signed release AAB
         uses: actions/upload-artifact@v4
         with:
-          name: mola-debug-aab
-          path: fermata/build/outputs/bundle/autoDebug/*.aab
+          name: mola-release-aab
+          path: fermata/build/outputs/bundle/autoRelease/*.aab
           if-no-files-found: error
