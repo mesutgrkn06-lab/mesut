@@ -1,0 +1,25 @@
+name: Review Mola 4.2 feature candidates
+on:
+  push:
+    paths:
+      - '.github/workflows/mola-42-feature-review.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch code difference report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 42276613894 -R mesutgrkn06-lab/mesut -n mola-42-actionable-review -D .
+      - name: Show candidate classes and method differences
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('mola-42-actionable-review.md').read_text()
+          print(s[:22000])
+          PY
