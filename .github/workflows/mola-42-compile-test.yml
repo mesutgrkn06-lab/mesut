@@ -163,10 +163,10 @@ jobs:
         run: bash gradlew :fermata:assembleAutoDebug :fermata:bundleAutoDebug -PAPP_ID=com.nexvory.mola42 --no-daemon --stacktrace
       - name: Check release signing credentials
         env:
-          STORE_B64: ${{ secrets.MOLA_KEYSTORE_BASE64 }}
-          STORE_PASS: ${{ secrets.MOLA_STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.MOLA_KEY_ALIAS }}
-          KEY_PASS: ${{ secrets.MOLA_KEY_PASSWORD }}
+          STORE_B64: ${{ secrets.MOLA42_KEYSTORE_BASE64 }}
+          STORE_PASS: ${{ secrets.MOLA42_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.MOLA42_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.MOLA42_KEY_PASSWORD }}
         run: |
           if [[ -n "$STORE_B64" && -n "$STORE_PASS" && -n "$KEY_ALIAS" && -n "$KEY_PASS" ]]; then
             printf '%s' "$STORE_B64" | base64 --decode > "$RUNNER_TEMP/mola-upload.jks"
@@ -182,9 +182,9 @@ jobs:
           bash gradlew :fermata:bundleAutoRelease -PAPP_ID=com.nexvory.mola42 --no-daemon --stacktrace
         env:
           FERMATAX_STORE_FILE: ${{ runner.temp }}/mola-upload.jks
-          FERMATAX_STORE_PASSWORD: ${{ secrets.MOLA_STORE_PASSWORD }}
-          FERMATAX_KEY_ALIAS: ${{ secrets.MOLA_KEY_ALIAS }}
-          FERMATAX_KEY_PASSWORD: ${{ secrets.MOLA_KEY_PASSWORD }}
+          FERMATAX_STORE_PASSWORD: ${{ secrets.MOLA42_STORE_PASSWORD }}
+          FERMATAX_KEY_ALIAS: ${{ secrets.MOLA42_KEY_ALIAS }}
+          FERMATAX_KEY_PASSWORD: ${{ secrets.MOLA42_KEY_PASSWORD }}
       - name: Save signed release AAB
         if: ${{ env.HAS_SIGNING == 'true' }}
         uses: actions/upload-artifact@v4
