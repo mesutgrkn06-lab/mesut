@@ -1,0 +1,60 @@
+name: Mola 4.2 integration mapping
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/mola-42-integration-map.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  map:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: moris545454/araba-
+          ref: v4.1.10
+      - name: Download Mola 4.2 decompiled sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/mola42"
+          gh run download 42275314224 -R mesutgrkn06-lab/mesut -n mola-42-jadx-analysis -D "$RUNNER_TEMP/mola42"
+      - name: Map integration call sites
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,re
+          old=Path('fermata/src/main/java/me/aap/fermata')
+          new=Path(os.environ['RUNNER_TEMP'])/'mola42/analysis/sources/me/aap/fermata'
+          classes=['CarNavigator','CarAppsStore','PhoneRotationGuard','ParkedCar']
+          lines=['# Mola 4.2 Android Auto integration map','']
+          for cls in classes:
+              lines += [f'## {cls}', '']
+              for label,root in [('Old v4.1.10',old),('Mola 4.2 decompiled',new)]:
+                  lines += [f'### {label}']
+                  matches=[]
+                  for file in root.rglob('*.java'):
+                      if file.stem==cls: continue
+                      try:
+                          txt=file.read_text(errors='replace')
+                      except OSError: continue
+                      for i,line in enumerate(txt.splitlines(),1):
+                          if re.search(r'\b'+re.escape(cls)+r'\b',line):
+                              matches.append(f'{file.relative_to(root)}:{i}: {line.strip()[:230]}')
+                  lines += ['\n'.join(matches[:100]) if matches else 'No references found','']
+              source=new/'auto'/f'{cls}.java'
+              if source.exists():
+                  lines += ['### Public methods']
+                  for line in source.read_text(errors='replace').splitlines():
+                      if re.search(r'\bpublic\s+(?:static\s+)?(?:final\s+)?[\w<>\[\].?]+\s+\w+\(',line):
+                          lines.append(line.strip()[:230])
+                  lines.append('')
+          Path('mola42-integration-map.md').write_text('\n'.join(lines))
+          print('\n'.join(lines)[:26000])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mola42-integration-map
+          path: mola42-integration-map.md
