@@ -161,6 +161,37 @@ jobs:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
       - name: Compile debug app with candidate
         run: bash gradlew :fermata:assembleAutoDebug :fermata:bundleAutoDebug -PAPP_ID=com.nexvory --no-daemon --stacktrace
+      - name: Check release signing credentials
+        env:
+          STORE_B64: ${{ secrets.MOLA_KEYSTORE_BASE64 }}
+          STORE_PASS: ${{ secrets.MOLA_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.MOLA_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.MOLA_KEY_PASSWORD }}
+        run: |
+          if [[ -n "$STORE_B64" && -n "$STORE_PASS" && -n "$KEY_ALIAS" && -n "$KEY_PASS" ]]; then
+            printf '%s' "$STORE_B64" | base64 --decode > "$RUNNER_TEMP/mola-upload.jks"
+            echo "HAS_SIGNING=true" >> "$GITHUB_ENV"
+            echo "Signing secrets present; release bundle will be built."
+          else
+            echo "HAS_SIGNING=false" >> "$GITHUB_ENV"
+            echo "Release signing not configured; skipping signed AAB."
+          fi
+      - name: Prepare signed Play Console release
+        if: ${{ env.HAS_SIGNING == 'true' }}
+        run: |
+          bash gradlew :fermata:bundleAutoRelease -PAPP_ID=com.nexvory --no-daemon --stacktrace
+        env:
+          FERMATAX_STORE_FILE: ${{ runner.temp }}/mola-upload.jks
+          FERMATAX_STORE_PASSWORD: ${{ secrets.MOLA_STORE_PASSWORD }}
+          FERMATAX_KEY_ALIAS: ${{ secrets.MOLA_KEY_ALIAS }}
+          FERMATAX_KEY_PASSWORD: ${{ secrets.MOLA_KEY_PASSWORD }}
+      - name: Save signed release AAB
+        if: ${{ env.HAS_SIGNING == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: mola-play-console-signed-release-aab
+          path: fermata/build/outputs/bundle/autoRelease/*.aab
+          if-no-files-found: error
       - name: Save test APK
         uses: actions/upload-artifact@v4
         if: success()
