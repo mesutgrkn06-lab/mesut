@@ -96,6 +96,12 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           root=Path('fermata/src/main/java/me/aap/fermata/ui/fragment')
+          items=root/'DashboardItems.java'
+          source=items.read_text()
+          constructor='private Item(String name, @IdRes int id, @DrawableRes int icon, String title,'
+          assert constructor in source
+          source=source.replace(constructor,'Item(String name, @IdRes int id, @DrawableRes int icon, String title,',1)
+          items.write_text(source)
           p=root/'DashboardModelBuilder.java'
           s=p.read_text()
           anchor='\t\tcards.add(DashboardCard.favoritesShelf(ctx));'
