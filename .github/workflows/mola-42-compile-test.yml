@@ -1,4 +1,4 @@
-name: Mola 4.2 Android Auto components compile (without ParkedCar)
+name: Mola 4.2 ParkedCar repair investigation
 on:
   push:
     paths:
@@ -31,7 +31,7 @@ jobs:
           from pathlib import Path
           import os
           root=Path(os.environ['RUNNER_TEMP'])/'mola42/analysis/sources/me/aap/fermata'
-          names=['auto/CarNavigator.java','auto/CarAppsStore.java','auto/PhoneRotationGuard.java']
+          names=['auto/CarNavigator.java','auto/CarAppsStore.java','auto/PhoneRotationGuard.java','auto/ParkedCar.java']
           for name in names:
               src=root/name
               assert src.is_file(), f'Missing: {src}'
@@ -44,6 +44,13 @@ jobs:
                   new='public static boolean isSelected(Context context, String str, String str2) throws org.json.JSONException {'
                   assert old in code, 'Expected JADX method signature not found'
                   code=code.replace(old,new,1)
+              if name=='auto/ParkedCar.java':
+                  print('PARKEDCAR SOURCE FOR REPAIR:')
+                  for i,line in enumerate(code.splitlines()[:105],1):
+                      print(f'{i:03}: {line}')
+                  code=code.replace('import com.android.tools.r8.RecordTag;', '')
+                  code=code.replace('@RecordTag', '')
+                  code=code.replace('OpenOnCarToken$ExternalSyntheticRecord0', 'java.util.Objects')
               dest.write_text(code)
               print('Added test class:',dest, 'bytes:',dest.stat().st_size)
           PY
