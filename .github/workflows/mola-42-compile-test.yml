@@ -1,4 +1,5 @@
 name: Mola 4.2 separate Play listing build
+# Re-trigger release signing after MOLA42 secrets setup
 on:
   push:
     paths:
