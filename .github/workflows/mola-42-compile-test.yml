@@ -181,6 +181,7 @@ jobs:
         if: ${{ env.HAS_SIGNING == 'true' }}
         env:
           MOLA_KEY_ALIAS: ${{ secrets.MOLA42_KEY_ALIAS }}
+          FERMATAX_STORE_PASSWORD: ${{ secrets.MOLA42_STORE_PASSWORD }}
         run: |
           expected='258fd433379765b197242fb1040316e9e5f122f2835d2c70329fdadeaed7b8d1'
           actual=$(keytool -list -keystore "$RUNNER_TEMP/mola-upload.jks" -storepass "$FERMATAX_STORE_PASSWORD" -alias "$MOLA_KEY_ALIAS" -v | sed -n 's/^[[:space:]]*SHA256: //p' | head -1 | tr -d ':' | tr '[:upper:]' '[:lower:]')
@@ -198,8 +199,6 @@ jobs:
           p.write_text(s)
           print('Approved new Mola42 certificate in temporary checkout only')
           PY
-        env:
-          FERMATAX_STORE_PASSWORD: ${{ secrets.MOLA42_STORE_PASSWORD }}
       - name: Prepare signed Play Console release
         if: ${{ env.HAS_SIGNING == 'true' }}
         run: |
