@@ -1,0 +1,59 @@
+name: Analyze Mola 4.2 APK source
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Download Mola 4.2 APK
+        run: |
+          curl -fL --retry 3 'https://github.com/mesutgrkn06-lab/mesut/releases/download/mola-4.2-apk/Mola-4.2.apk' -o Mola-4.2.apk
+          test "$(stat -c %s Mola-4.2.apk)" -gt 10000000
+      - name: Download JADX
+        run: |
+          curl -fL --retry 3 https://github.com/skylot/jadx/releases/download/v1.5.3/jadx-1.5.3.zip -o jadx.zip
+          mkdir jadx
+          unzip -q jadx.zip -d jadx
+          chmod +x jadx/bin/jadx
+      - name: Decompile Java sources
+        run: |
+          mkdir -p analysis
+          jadx/bin/jadx --threads-count 4 --show-bad-code --output-dir analysis Mola-4.2.apk
+      - name: Generate source analysis summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import collections
+          root=Path('analysis')
+          files=list(root.rglob('*.java'))
+          with open('source-summary.txt','w') as f:
+              f.write('Mola 4.2 JADX analysis\n')
+              f.write(f'Decompiled Java files: {len(files)}\n')
+              dirs=collections.Counter('/'.join(p.relative_to(root).parts[:4]) for p in files)
+              for k,v in dirs.most_common(80):
+                  f.write(f'{v:6} {k}\n')
+              for term in ('androidx.car','media','youtube','fermata','mola','nexvory'):
+                  hits=[str(p.relative_to(root)) for p in files if term in str(p).lower()]
+                  f.write(f'\nTERM {term}: {len(hits)}\n')
+                  f.write('\n'.join(hits[:80])+'\n')
+          PY
+      - name: Upload analysis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mola-42-jadx-analysis
+          path: |
+            source-summary.txt
+            analysis/sources/
+            analysis/resources/AndroidManifest.xml
+          retention-days: 7
+          if-no-files-found: warn
