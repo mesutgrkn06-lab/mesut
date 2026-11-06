@@ -69,6 +69,28 @@ jobs:
           p.write_text(s)
           print('Integrated PhoneRotationGuard.recover into FermataApplication.onCreate')
           PY
+      - name: Integrate car apps state with dashboard lifecycle
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('fermata/src/main/java/me/aap/fermata/ui/fragment/DashboardFragment.java')
+          s=p.read_text()
+          # Ensure selected car apps are read during each dashboard rebuild.
+          # No new cards are rendered yet; this is the data-layer integration.
+          anchor='\t\tprivate void rebuildCards(@Nullable DashboardCard smartTopCard) {'
+          assert s.count(anchor)==1
+          replacement=anchor+'''
+              if (activity.getRuntimeHostMode().usesAutomotivePresentation()) {
+                  try {
+                      me.aap.fermata.auto.CarAppsStore.getSelectedApps(ctx);
+                  } catch (org.json.JSONException e) {
+                      me.aap.utils.log.Log.e(e, "Failed to load selected car apps");
+                  }
+              }'''
+          s=s.replace(anchor,replacement,1)
+          p.write_text(s)
+          print('Dashboard now reads selected car apps in automotive mode')
+          PY
       - name: Configure JDK and Android SDK
         uses: actions/setup-java@v4
         with:
@@ -83,6 +105,6 @@ jobs:
         uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: mola-42-rotation-integrated-debug-test
+          name: mola-42-car-apps-dashboard-debug-test
           path: fermata/build/outputs/apk/auto/debug/*.apk
           if-no-files-found: warn
