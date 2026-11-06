@@ -1,0 +1,33 @@
+name: Mola 4.2 Test APK
+on:
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/download-artifact@v4
+        with:
+          name: mola-4-2-signed-experimental
+          run-id: 42254169162
+          github-token: ${{ github.token }}
+          path: input
+      - name: Convert to universal APK
+        env:
+          KEY_B64: ${{ secrets.MOLA_KEYSTORE_B64 }}
+          KEY_PASSWORD: ${{ secrets.MOLA_STORE_PASSWORD }}
+        run: |
+          echo "$KEY_B64" | base64 -d > key.jks
+          curl -fsSL https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar -o bundletool.jar
+          java -jar bundletool.jar build-apks --bundle=input/Mola-4.2-signed-experimental.aab --output=app.apks --mode=universal --ks=key.jks --ks-key-alias=mola --ks-pass=env:KEY_PASSWORD --key-pass=env:KEY_PASSWORD
+          unzip -p app.apks universal.apk > Mola-4.2-test.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mola-4.2-test-APK
+          path: Mola-4.2-test.apk
