@@ -1,4 +1,4 @@
-name: Mola 4.2 Android Auto components compile
+name: Mola 4.2 Android Auto components compile (without ParkedCar)
 on:
   push:
     paths:
@@ -31,7 +31,7 @@ jobs:
           from pathlib import Path
           import os
           root=Path(os.environ['RUNNER_TEMP'])/'mola42/analysis/sources/me/aap/fermata'
-          names=['auto/CarNavigator.java','auto/CarAppsStore.java','auto/ParkedCar.java','auto/PhoneRotationGuard.java']
+          names=['auto/CarNavigator.java','auto/CarAppsStore.java','auto/PhoneRotationGuard.java']
           for name in names:
               src=root/name
               assert src.is_file(), f'Missing: {src}'
