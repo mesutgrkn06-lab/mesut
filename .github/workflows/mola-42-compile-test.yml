@@ -1,4 +1,4 @@
-name: Mola 4.2 isolated CarNavigator compile
+name: Mola 4.2 Android Auto components compile
 on:
   push:
     paths:
@@ -25,18 +25,21 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/mola42"
           gh run download 42275314224 -R mesutgrkn06-lab/mesut -n mola-42-jadx-analysis -D "$RUNNER_TEMP/mola42"
-      - name: Copy first candidate into isolated working tree
+      - name: Port Android Auto candidate classes into isolated working tree
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import os
-          src=Path(os.environ['RUNNER_TEMP'])/'mola42/analysis/sources/me/aap/fermata/auto/CarNavigator.java'
-          assert src.is_file(), f'Missing: {src}'
-          dest=Path('fermata/src/main/java/me/aap/fermata/auto/CarNavigator.java')
-          dest.parent.mkdir(parents=True,exist_ok=True)
-          assert not dest.exists(), 'Existing source must not be overwritten'
-          dest.write_bytes(src.read_bytes())
-          print('Added test class:',dest, 'bytes:',dest.stat().st_size)
+          root=Path(os.environ['RUNNER_TEMP'])/'mola42/analysis/sources/me/aap/fermata'
+          names=['auto/CarNavigator.java','auto/CarAppsStore.java','auto/ParkedCar.java','auto/PhoneRotationGuard.java']
+          for name in names:
+              src=root/name
+              assert src.is_file(), f'Missing: {src}'
+              dest=Path('fermata/src/main/java/me/aap/fermata')/name
+              dest.parent.mkdir(parents=True,exist_ok=True)
+              assert not dest.exists(), f'Existing source must not be overwritten: {dest}'
+              dest.write_bytes(src.read_bytes())
+              print('Added test class:',dest, 'bytes:',dest.stat().st_size)
           PY
       - name: Configure JDK and Android SDK
         uses: actions/setup-java@v4
@@ -52,6 +55,6 @@ jobs:
         uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: mola-42-car-navigator-debug-test
+          name: mola-42-auto-components-debug-test
           path: fermata/build/outputs/apk/auto/debug/*.apk
           if-no-files-found: warn
