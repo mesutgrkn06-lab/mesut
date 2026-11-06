@@ -49,8 +49,11 @@ jobs:
                   for i,line in enumerate(code.splitlines()[:105],1):
                       print(f'{i:03}: {line}')
                   code=code.replace('import com.android.tools.r8.RecordTag;', '')
-                  code=code.replace('@RecordTag', '')
-                  code=code.replace('OpenOnCarToken$ExternalSyntheticRecord0', 'java.util.Objects')
+                  code=code.replace('class Spot extends RecordTag', 'class Spot')
+                  code=code.replace('OpenOnCarToken$$ExternalSyntheticRecord0.m(this.time, this.accuracy, this.lat, this.lng)', 'java.util.Objects.hash(this.time, this.accuracy, this.lat, this.lng)')
+                  code=code.replace('OpenOnCarToken$$ExternalSyntheticRecord0.m($record$getFieldsAsObjects(), Spot.class, "lat;lng;accuracy;time")', '"Spot[lat=" + this.lat + ", lng=" + this.lng + ", accuracy=" + this.accuracy + ", time=" + this.time + "]"')
+                  assert 'OpenOnCarToken$$ExternalSyntheticRecord0' not in code
+                  assert 'RecordTag' not in code
               dest.write_text(code)
               print('Added test class:',dest, 'bytes:',dest.stat().st_size)
           PY
