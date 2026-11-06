@@ -1,0 +1,77 @@
+name: Mola 4.2 actionable changes report
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch existing decompilation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir decompiled
+          gh run download 42275314224 -n mola-42-jadx-analysis -D decompiled
+      - name: Fetch upstream sources
+        run: git clone --depth 1 --branch v4.1.10 https://github.com/moris545454/araba-.git upstream
+      - name: Inspect real code changes and exclude generated classes
+        run: |
+          cat > inspect.py <<'PY'
+          from pathlib import Path
+          import re,difflib
+          def source(root,ext):
+              d={}
+              for p in root.rglob('*'):
+                  if p.suffix not in ext: continue
+                  s=p.read_text(errors='replace')
+                  m=re.search(r'^\s*package\s+([\w.]+)',s,re.M)
+                  if m: d[m.group(1)+'.'+p.stem]=(p,s)
+              return d
+          old=source(Path('upstream'),{'.java','.kt'})
+          new=source(Path('decompiled'),{'.java'})
+          prefix='me.aap.fermata.'
+          newonly=sorted(k for k in new.keys()-old.keys() if k.startswith(prefix))
+          generated=[k for k in newonly if '$' in k or re.search(r'\.(?:R|BuildConfig|Manifest)(?:$|\.)',k)]
+          candidates=[k for k in newonly if k not in generated]
+          # Prioritize app-owned non-generated classes and surface source snippets for review.
+          out=['# Mola 4.2 reconstruction review','',
+               'This report identifies candidates, not verified new features. Do not copy decompiled files into the Gradle project blindly.',
+               f'Common app classes: {len([k for k in new.keys()&old.keys() if k.startswith(prefix)])}',
+               f'4.2-only app class names: {len(newonly)}',
+               f'Likely generated / synthetic: {len(generated)}',
+               f'Candidate class names: {len(candidates)}','',
+               '## Candidate classes and their declared methods']
+          for k in candidates[:200]:
+              p,s=new[k]
+              out+=['',f'### {k}',f'Path: {p}']
+              for line in s.splitlines():
+                  line=line.strip()
+                  if len(line)<230 and ('(' in line and ')' in line) and re.search(r'\b(public|private|protected|static|void|boolean|int|String)\b',line):
+                      out.append('- '+line)
+                      if len(out)>1800: break
+              if len(out)>1800: break
+          out+=['','## Common app classes with changed declared method-name sets']
+          def methods(s):
+              # Approximate method declarations, excluding decompiler comments.
+              return set(re.findall(r'\b(?:public|private|protected|internal|override|fun)\s+(?:[\w<>?\[\]., ]+\s+)?([A-Za-z_][\w]*)\s*\(',s))
+          changed=[]
+          for k in sorted(new.keys()&old.keys()):
+              if not k.startswith(prefix): continue
+              a=methods(old[k][1]); b=methods(new[k][1])
+              added=b-a
+              if added: changed.append((len(added),k,sorted(added)[:30]))
+          for count,k,names in sorted(changed,reverse=True)[:100]:
+              out.append(f'- {k}: {count} candidate added method names: {", ".join(names)}')
+          Path('mola-42-actionable-review.md').write_text('\n'.join(out))
+          print(f'4.2-only={len(newonly)} synthetic={len(generated)} candidates={len(candidates)} changed-method-classes={len(changed)}')
+          PY
+          python3 inspect.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mola-42-actionable-review
+          path: mola-42-actionable-review.md
+          if-no-files-found: error
