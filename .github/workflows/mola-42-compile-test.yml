@@ -177,6 +177,29 @@ jobs:
             echo "HAS_SIGNING=false" >> "$GITHUB_ENV"
             echo "Release signing not configured; skipping signed AAB."
           fi
+      - name: Approve isolated Mola 4.2 upload certificate
+        if: ${{ env.HAS_SIGNING == 'true' }}
+        env:
+          MOLA_KEY_ALIAS: ${{ secrets.MOLA42_KEY_ALIAS }}
+        run: |
+          expected='258fd433379765b197242fb1040316e9e5f122f2835d2c70329fdadeaed7b8d1'
+          actual=$(keytool -list -keystore "$RUNNER_TEMP/mola-upload.jks" -storepass "$FERMATAX_STORE_PASSWORD" -alias "$MOLA_KEY_ALIAS" -v | sed -n 's/^[[:space:]]*SHA256: //p' | head -1 | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          if [[ "$actual" != "$expected" ]]; then
+            echo "::error::Mola42 upload certificate does not match expected fingerprint"
+            exit 1
+          fi
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('settings.gradle')
+          s=p.read_text()
+          marker="'a86d576ff1ec0e3245f5a6152c5d8d66b5df8bb510820d75dc61110b19c3aeb4'"
+          assert s.count(marker)==1, 'Upstream signing allowlist changed'
+          s=s.replace(marker,marker+",\n        '258fd433379765b197242fb1040316e9e5f122f2835d2c70329fdadeaed7b8d1'",1)
+          p.write_text(s)
+          print('Approved new Mola42 certificate in temporary checkout only')
+          PY
+        env:
+          FERMATAX_STORE_PASSWORD: ${{ secrets.MOLA42_STORE_PASSWORD }}
       - name: Prepare signed Play Console release
         if: ${{ env.HAS_SIGNING == 'true' }}
         run: |
