@@ -1,0 +1,60 @@
+name: Mola 4.2 source port feasibility
+on:
+  push:
+    paths:
+      - '.github/workflows/mola-42-port-feasibility.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  port:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch Mola 4.2 decompilation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir decompiled
+          gh run download 42275314224 -n mola-42-jadx-analysis -D decompiled
+      - name: Fetch 4.1.10 source
+        run: git clone --depth 1 --branch v4.1.10 https://github.com/moris545454/araba-.git upstream
+      - name: Map candidate code into source modules
+        run: |
+          cat > map.py <<'PY'
+          from pathlib import Path
+          import re
+          base=Path('upstream')
+          decomp=Path('decompiled/analysis/sources/me/aap/fermata')
+          names=['auto/CarAppsStore.java','auto/CarNavigator.java','auto/ParkedCar.java','auto/PhoneRotationGuard.java','addon/web/yt/YoutubePseudoFullscreen.java','addon/web/yt/YoutubeTapSeek.java','media/lib/VoiceTitleMatcher.java','media/lib/VoiceContentRanker.java','media/service/CarResumeMemory.java']
+          report=['# Mola 4.2 source-port feasibility','', 'Only inspect these decompiled classes; no unverified code is merged into the app.', '']
+          for name in names:
+              src=decomp/name
+              report += ['## '+name]
+              if not src.exists():
+                  report += ['Missing from JADX output','']; continue
+              s=src.read_text(errors='replace')
+              imports=re.findall(r'^import (me\.aap\.[\w.]+);',s,re.M)
+              references=[]
+              for imp in imports:
+                  path=imp.replace('.','/')
+                  matches=list(base.rglob(path.split('/')[-1]+'.java'))+list(base.rglob(path.split('/')[-1]+'.kt'))
+                  references.append((imp,bool(matches)))
+              pkg=re.search(r'^package ([\w.]+);',s,re.M)
+              classname=src.stem
+              existing=list(base.rglob(classname+'.java'))+list(base.rglob(classname+'.kt'))
+              report += [f'JADX lines: {len(s.splitlines())}', f'Original class with same name: {bool(existing)}',f'App-specific imports: {len(imports)}',f'Unresolved imports by filename: {sum(not ok for _,ok in references)}']
+              report += [f'- MISSING: {imp}' for imp,ok in references if not ok][:30]
+              report += ['']
+          Path('mola-42-port-feasibility.md').write_text('\n'.join(report))
+          print('\n'.join(report))
+          PY
+          python3 map.py
+      - name: Upload porting assessment
+        uses: actions/upload-artifact@v4
+        with:
+          name: mola-42-port-feasibility
+          path: mola-42-port-feasibility.md
+          if-no-files-found: error
