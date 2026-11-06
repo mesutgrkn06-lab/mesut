@@ -24,36 +24,15 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
-      - name: Configure unsigned Play test bundle and application ID
+      - name: Verify source configuration
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('settings.gradle')
-          text = p.read_text()
-          signature_gate = """if (releaseArtifactRequested && !gradle.ext.releaseSigningConfigured) {
-    throw new GradleException('Release artifact tasks require explicit FERMATAX signing credentials.')
-}"""
-          assert signature_gate in text, 'Expected signing guard missing'
-          text = text.replace(signature_gate, '// Unsigned bundle build: signing guard intentionally bypassed in CI workspace')
-          begin = text.index('gradle.taskGraph.whenReady { graph ->')
-          finish = text.index("\nrootProject.name", begin)
-          text = text[:begin] + '// Release graph signing guard removed for unsigned CI bundle only.\n' + text[finish:]
-          p.write_text(text)
-
-          p = Path('fermata/build.gradle')
-          text = p.read_text()
-          old1 = "configuredApplicationId + '.auto' + configuredAutoIdSuffix"
-          old2 = "applicationIdSuffix '.auto' + project.getProperties().getOrDefault('APP_ID_SFX', '')"
-          assert old1 in text and old2 in text, 'Expected auto application IDs missing'
-          text = text.replace(old1, "configuredApplicationId + '.mola' + configuredAutoIdSuffix")
-          text = text.replace(old2, "applicationIdSuffix '.mola' + project.getProperties().getOrDefault('APP_ID_SFX', '')")
-          p.write_text(text)
-          PY
-      - name: Build unsigned AAB
-        run: bash gradlew :fermata:bundleAutoRelease -PAPP_ID=com.nexvory --no-daemon --stacktrace
-      - name: Upload unsigned AAB for build verification
+          grep -n 'applicationIdSuffix' fermata/build.gradle
+          grep -n 'VERSION_NAME' gradle.properties || true
+      - name: Build debug bundle to verify source
+        run: bash gradlew :fermata:bundleAutoDebug -PAPP_ID=com.nexvory --no-daemon
+      - name: Upload debug AAB for build verification
         uses: actions/upload-artifact@v4
         with:
-          name: mola-unsigned-aab
-          path: fermata/build/outputs/bundle/autoRelease/*.aab
+          name: mola-debug-aab
+          path: fermata/build/outputs/bundle/autoDebug/*.aab
           if-no-files-found: error
