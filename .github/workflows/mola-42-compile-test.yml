@@ -1,4 +1,4 @@
-name: Mola 4.2 car apps dashboard tiles
+name: Mola 4.2 APK and AAB build test
 on:
   push:
     paths:
@@ -160,11 +160,13 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
       - name: Compile debug app with candidate
-        run: bash gradlew :fermata:assembleAutoDebug -PAPP_ID=com.nexvory --no-daemon --stacktrace
+        run: bash gradlew :fermata:assembleAutoDebug :fermata:bundleAutoDebug -PAPP_ID=com.nexvory --no-daemon --stacktrace
       - name: Save test APK
         uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: mola-42-car-apps-tiles-debug-test
-          path: fermata/build/outputs/apk/auto/debug/*.apk
+          name: mola-42-apk-aab-debug-test
+          path: |
+            fermata/build/outputs/apk/auto/debug/*.apk
+            fermata/build/outputs/bundle/autoDebug/*.aab
           if-no-files-found: warn
