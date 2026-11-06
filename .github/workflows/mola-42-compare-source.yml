@@ -1,0 +1,71 @@
+name: Compare Mola 4.2 with 4.1.10 source
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download JADX analysis artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p decompiled
+          gh run download 42275314224 -n mola-42-jadx-analysis -D decompiled
+      - name: Download upstream source v4.1.10
+        run: |
+          git clone --depth 1 --branch v4.1.10 https://github.com/moris545454/araba-.git upstream
+      - name: Compare source trees
+        run: |
+          cat > compare.py <<'PY'
+          from pathlib import Path
+          from collections import Counter
+          import re
+          old=Path('upstream')
+          new=Path('decompiled')
+          oldfiles=list(old.rglob('*.java'))+list(old.rglob('*.kt'))
+          newfiles=list(new.rglob('*.java'))
+          def package(p):
+              try:
+                  s=p.read_text(errors='replace')[:10000]
+                  m=re.search(r'^\\s*package\\s+([\\w.]+)\\s*;',s,re.M)
+                  if not m: m=re.search(r'^\\s*package\\s+([\\w.]+)',s,re.M)
+                  return m.group(1) if m else None
+              except Exception: return None
+          def index(files):
+              result={}
+              for p in files:
+                  pkg=package(p)
+                  if pkg: result[pkg+'.'+p.stem]=p
+              return result
+          a=index(oldfiles); b=index(newfiles)
+          overlap=sorted(set(a)&set(b))
+          report=['# Mola 4.1.10 source vs 4.2 APK (JADX)', '',
+                  'This is a structural comparison, not a functional reconstruction.',
+                  f'Upstream source files: {len(oldfiles)}',
+                  f'JADX Java files: {len(newfiles)}',
+                  f'Classes with matching qualified names: {len(overlap)}', '',
+                  '## Shared class names (first 300)']
+          report += ['- '+n for n in overlap[:300]]
+          report += ['', '## 4.2 classes absent from old source (first 300)']
+          report += ['- '+n for n in sorted(set(b)-set(a))[:300]]
+          report += ['', '## Old source classes absent from 4.2 (first 150)']
+          report += ['- '+n for n in sorted(set(a)-set(b))[:150]]
+          keywords=('androidx.car','media','youtube','fermata','mola','nexvory','androidauto','carapp')
+          report += ['', '## Keyword path hits in 4.2']
+          for term in keywords:
+              hits=[n for n in b if term in n.lower()]
+              report += [f'### {term}: {len(hits)}']+['- '+n for n in hits[:100]]
+          Path('mola-42-comparison.md').write_text('\\n'.join(report))
+          print('\\n'.join(report[:12]))
+          PY
+          python3 compare.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mola-42-source-comparison
+          path: mola-42-comparison.md
+          if-no-files-found: error
