@@ -40,6 +40,26 @@ for p in sorted((root/'res').rglob('*'),key=lambda x:len(x.parts),reverse=True):
     if '$' in p.name:
         p.rename(p.with_name(p.name.replace('$','generated_')))
 PY
+# Decompiled strings may contain multiple non-positional printf placeholders.
+# Prevent AAPT2's formatting validator from rejecting recovered string resources.
+python3 - "$WORK/decoded/res" <<'PY'
+from pathlib import Path
+import sys,re
+root=Path(sys.argv[1])
+count=0
+for p in root.glob('values*/strings.xml'):
+    s=p.read_text('utf-8')
+    def fix(m):
+        global count
+        tag=m.group(0)
+        if 'formatted=' not in tag:
+            count+=1
+            return tag[:-1]+' formatted="false">'
+        return tag
+    s=re.sub(r'<string\b[^>]*>',fix,s)
+    p.write_text(s,'utf-8')
+print('Disabled formatting validation on',count,'string entries')
+PY
 mkdir -p "$WORK/base/manifest" "$WORK/base/dex"
 "$WORK/aapt2" compile --dir "$WORK/decoded/res" -o "$WORK/compiled.zip"
 "$WORK/aapt2" link --proto-format -o "$WORK/linked.zip" \
