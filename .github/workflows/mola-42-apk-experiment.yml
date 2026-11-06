@@ -1,0 +1,42 @@
+name: Experiment - Mola 4.2 APK to AAB
+on:
+  workflow_dispatch:
+    inputs:
+      apk_url:
+        description: 'Public direct HTTPS URL to Mola 4.2 APK (for example a GitHub Release asset)'
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  reconstruct:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout conversion script
+        uses: actions/checkout@v4
+      - name: Install Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Android SDK 36
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+      - name: Download supplied APK
+        env:
+          APK_URL: ${{ inputs.apk_url }}
+        run: |
+          case "$APK_URL" in https://*) ;; *) echo 'Only HTTPS URLs allowed'; exit 1;; esac
+          curl --fail --location --retry 3 "$APK_URL" --output Mola-4.2.apk
+          test "$(stat -c %s Mola-4.2.apk)" -gt 10000000
+      - name: Attempt APK reconstruction
+        run: bash tools/build-mola-42-from-apk.sh Mola-4.2.apk Mola-4.2-repacked.aab
+      - name: Upload reconstructed AAB if produced
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mola-4-2-experimental-unsigned-aab
+          path: Mola-4.2-repacked.aab
+          if-no-files-found: error
