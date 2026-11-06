@@ -1,4 +1,4 @@
-name: Mola 4.2 ParkedCar repair investigation
+name: Mola 4.2 PhoneRotationGuard lifecycle integration
 on:
   push:
     paths:
@@ -57,6 +57,18 @@ jobs:
               dest.write_text(code)
               print('Added test class:',dest, 'bytes:',dest.stat().st_size)
           PY
+      - name: Integrate rotation recovery into application startup
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('fermata/src/main/java/me/aap/fermata/FermataApplication.java')
+          s=p.read_text()
+          marker='\t\tsuper.onCreate();'
+          assert s.count(marker)==1, 'Application lifecycle anchor changed'
+          s=s.replace(marker, marker+'\n\t\tme.aap.fermata.auto.PhoneRotationGuard.recover(this);',1)
+          p.write_text(s)
+          print('Integrated PhoneRotationGuard.recover into FermataApplication.onCreate')
+          PY
       - name: Configure JDK and Android SDK
         uses: actions/setup-java@v4
         with:
@@ -71,6 +83,6 @@ jobs:
         uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: mola-42-auto-components-debug-test
+          name: mola-42-rotation-integrated-debug-test
           path: fermata/build/outputs/apk/auto/debug/*.apk
           if-no-files-found: warn
