@@ -1,4 +1,4 @@
-name: Mola 4.2 PhoneRotationGuard lifecycle integration
+name: Mola 4.2 car apps dashboard tiles
 on:
   push:
     paths:
@@ -91,6 +91,60 @@ jobs:
           p.write_text(s)
           print('Dashboard now reads selected car apps in automotive mode')
           PY
+      - name: Add selected car app tiles and click handling
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('fermata/src/main/java/me/aap/fermata/ui/fragment')
+          p=root/'DashboardModelBuilder.java'
+          s=p.read_text()
+          anchor='\t\tcards.add(DashboardCard.favoritesShelf(ctx));'
+          assert s.count(anchor)==1
+          insert='''\t\tif (automotive) {
+              try {
+                  for (me.aap.fermata.auto.CarAppsStore.AppItem app :
+                          me.aap.fermata.auto.CarAppsStore.getSelectedApps(ctx)) {
+                      cards.add(DashboardCard.item(new DashboardItems.Item(
+                              "car_app:" + app.componentString(),
+                              me.aap.utils.ui.UiUtils.ID_NULL,
+                              R.drawable.web,
+                              app.componentString(), "Araç uygulaması", null)));
+                  }
+              } catch (org.json.JSONException ignored) {
+                  // Invalid stored app selection must not break the dashboard.
+              }
+          }
+'''
+          s=s.replace(anchor,insert+anchor,1)
+          p.write_text(s)
+          p=root/'DashboardFragment.java'
+          s=p.read_text()
+          anchor='\t\t\t\tif (card.targetId == ID_NULL) return;'
+          assert s.count(anchor)==1
+          insert='''\t\t\t\tif ((card.item != null) && card.item.name.startsWith("car_app:")) {
+                      String component = card.item.name.substring("car_app:".length());
+                      android.content.ComponentName target =
+                              android.content.ComponentName.unflattenFromString(component);
+                      if (target != null) {
+                          android.content.Intent intent = new android.content.Intent(
+                                  android.content.Intent.ACTION_MAIN);
+                          intent.addCategory(android.content.Intent.CATEGORY_LAUNCHER);
+                          intent.setComponent(target);
+                          intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                          try {
+                              ctx.startActivity(intent);
+                          } catch (android.content.ActivityNotFoundException |
+                                  SecurityException ignored) {
+                              // An unavailable or blocked external app must not crash Mola.
+                          }
+                      }
+                      return;
+                  }
+'''
+          s=s.replace(anchor,insert+anchor,1)
+          p.write_text(s)
+          print('Added dashboard tiles and explicit component launches')
+          PY
       - name: Configure JDK and Android SDK
         uses: actions/setup-java@v4
         with:
@@ -105,6 +159,6 @@ jobs:
         uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: mola-42-car-apps-dashboard-debug-test
+          name: mola-42-car-apps-tiles-debug-test
           path: fermata/build/outputs/apk/auto/debug/*.apk
           if-no-files-found: warn
