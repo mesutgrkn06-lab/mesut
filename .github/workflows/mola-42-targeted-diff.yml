@@ -1,0 +1,85 @@
+name: Mola 4.2 targeted code differences
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download decompiled APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir decompiled
+          gh run download 42275314224 -n mola-42-jadx-analysis -D decompiled
+      - name: Clone original source
+        run: git clone --depth 1 --branch v4.1.10 https://github.com/moris545454/araba-.git upstream
+      - name: Produce focused differences
+        run: |
+          cat > analyze.py <<'PY'
+          from pathlib import Path
+          import re,difflib,json
+          def read(p): return p.read_text(errors='replace')
+          def package(s):
+              m=re.search(r'^\s*package\s+([\w.]+)',s,re.M)
+              return m.group(1) if m else None
+          def build(root,exts):
+              result={}
+              for p in root.rglob('*'):
+                  if p.suffix not in exts or not p.is_file(): continue
+                  s=read(p)
+                  pkg=package(s)
+                  if pkg: result[pkg+'.'+p.stem]=(p,s)
+              return result
+          old=build(Path('upstream'),{'.java','.kt'})
+          new=build(Path('decompiled'),{'.java'})
+          both=set(old)&set(new)
+          prefix='me.aap.fermata'
+          relevant=sorted(n for n in both if n.startswith(prefix))
+          def signatures(s):
+              lines=[]
+              for line in s.splitlines():
+                  line=line.strip()
+                  if re.search(r'\b(class|interface|enum|fun|public|protected|private|override|static)\b',line) and ('(' in line or re.search(r'\b(class|interface|enum)\b',line)):
+                      line=re.sub(r'\s+',' ',line)
+                      if len(line)<300: lines.append(line)
+              return lines
+          out=['# Mola 4.2 vs v4.1.10: targeted Fermata API differences','',
+               'JADX output is approximate; Kotlin vs Java compilation, obfuscation and synthetic methods create false positives.',
+               f'Common classes overall: {len(both)}',
+               f'Common Fermata classes: {len(relevant)}','']
+          ranked=[]
+          for n in relevant:
+              o=signatures(old[n][1]); v=signatures(new[n][1])
+              sm=difflib.SequenceMatcher(None,o,v)
+              score=sm.ratio()
+              ranked.append((score,n,o,v))
+          ranked.sort()
+          out+=['## Most structurally different matching classes (first 60)']
+          for score,n,o,v in ranked[:60]:
+              out.append(f'- {n} | signature similarity {score:.2f} | old {len(o)} / new {len(v)}')
+          out+=['','## Detailed signatures for 20 selected classes']
+          for score,n,o,v in ranked[:20]:
+              out+=['',f'### {n} (similarity {score:.2f})','**Old signatures:**']
+              out+=['- '+s for s in o[:35]]
+              out+=['**4.2 signatures:**']
+              out+=['- '+s for s in v[:35]]
+          new_app=sorted(n for n in new if n.startswith(prefix) and n not in old)
+          out+=['','## Fermata classes in 4.2 not in original source (first 200)']
+          out+=['- '+n for n in new_app[:200]]
+          Path('mola-42-targeted-diff.md').write_text('\n'.join(out))
+          Path('mola-42-targeted-diff.json').write_text(json.dumps({'common':len(both),'fermata_common':len(relevant),'new_fermata_classes':new_app,'most_different':[{'class':n,'similarity':round(score,3)} for score,n,_,_ in ranked[:100]]},indent=2))
+          print(f'Common {len(both)}; Fermata {len(relevant)}; 4.2-only Fermata classes {len(new_app)}')
+          PY
+          python3 analyze.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mola-42-targeted-code-diff
+          path: |
+            mola-42-targeted-diff.md
+            mola-42-targeted-diff.json
+          if-no-files-found: error
