@@ -1,0 +1,48 @@
+name: Build Mola AAB
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      NO_GS: 'true'
+    steps:
+      - name: Fetch source
+        uses: actions/checkout@v4
+        with:
+          repository: moris545454/araba-
+          ref: main
+      - name: Configure Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Configure Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platform-tools
+            platforms;android-36
+            build-tools;36.0.0
+            ndk;29.0.14206865
+      - name: Change Android Auto package ID
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('fermata/build.gradle')
+          s=p.read_text()
+          old="applicationIdSuffix '.auto' + project.getProperties().getOrDefault('APP_ID_SFX', '')"
+          assert old in s, 'Auto flavor config changed upstream'
+          p.write_text(s.replace(old,"applicationIdSuffix '.mola' + project.getProperties().getOrDefault('APP_ID_SFX', '')"))
+          PY
+      - name: Build AAB
+        run: bash gradlew :fermata:bundleAutoRelease -PAPP_ID=com.nexvory --no-daemon --stacktrace
+      - name: Upload unsigned AAB for build verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: mola-unsigned-aab
+          path: fermata/build/outputs/bundle/autoRelease/*.aab
+          if-no-files-found: error
