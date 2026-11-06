@@ -1,0 +1,49 @@
+name: Sign and inspect Mola 4.2 experimental AAB
+on:
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Download reconstructed AAB
+        uses: actions/download-artifact@v4
+        with:
+          name: mola-4-2-experimental-unsigned-aab
+          run-id: 42253808369
+          github-token: ${{ github.token }}
+          path: input
+      - name: Sign bundle with existing upload key
+        env:
+          SIGNING_KEY: ${{ secrets.MOLA_KEYSTORE_B64 }}
+          SIGNING_PASSWORD: ${{ secrets.MOLA_STORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SIGNING_KEY" && test -n "$SIGNING_PASSWORD"
+          printf '%s' "$SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/mola.jks"
+          find input -type f -maxdepth 2 -print
+          AAB="$(find input -type f -name '*.aab' -print -quit)"
+          test -n "$AAB"
+          cp "$AAB" Mola-4.2-signed-experimental.aab
+          jarsigner -keystore "$RUNNER_TEMP/mola.jks" -storepass "$SIGNING_PASSWORD" -keypass "$SIGNING_PASSWORD" -sigalg SHA256withRSA -digestalg SHA-256 Mola-4.2-signed-experimental.aab mola
+          jarsigner -verify -verbose -certs Mola-4.2-signed-experimental.aab > verification.txt
+          grep -E 'jar verified|Warning' verification.txt || true
+          curl -fsSL https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar -o bundletool.jar
+          java -jar bundletool.jar validate --bundle=Mola-4.2-signed-experimental.aab
+          java -jar bundletool.jar dump manifest --bundle=Mola-4.2-signed-experimental.aab --module=base > manifest-check.txt
+          grep -E 'package=|versionCode|versionName|uses-sdk' manifest-check.txt | head -20
+      - name: Upload signed experimental AAB and manifest report
+        uses: actions/upload-artifact@v4
+        with:
+          name: mola-4-2-signed-experimental
+          path: |
+            Mola-4.2-signed-experimental.aab
+            manifest-check.txt
+          if-no-files-found: error
