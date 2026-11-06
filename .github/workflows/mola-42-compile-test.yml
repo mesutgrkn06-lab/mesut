@@ -114,7 +114,7 @@ jobs:
                   // Invalid stored app selection must not break the dashboard.
               }
           }
-'''
+          '''
           s=s.replace(anchor,insert+anchor,1)
           p.write_text(s)
           p=root/'DashboardFragment.java'
@@ -140,7 +140,7 @@ jobs:
                       }
                       return;
                   }
-'''
+          '''
           s=s.replace(anchor,insert+anchor,1)
           p.write_text(s)
           print('Added dashboard tiles and explicit component launches')
