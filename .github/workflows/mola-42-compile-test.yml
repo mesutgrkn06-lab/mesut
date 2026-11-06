@@ -38,7 +38,13 @@ jobs:
               dest=Path('fermata/src/main/java/me/aap/fermata')/name
               dest.parent.mkdir(parents=True,exist_ok=True)
               assert not dest.exists(), f'Existing source must not be overwritten: {dest}'
-              dest.write_bytes(src.read_bytes())
+              code=src.read_text(errors='replace')
+          if name=='auto/CarAppsStore.java':
+              old='public static boolean isSelected(Context context, String str, String str2) {'
+              new='public static boolean isSelected(Context context, String str, String str2) throws org.json.JSONException {'
+              assert old in code, 'Expected JADX method signature not found'
+              code=code.replace(old,new,1)
+          dest.write_text(code)
               print('Added test class:',dest, 'bytes:',dest.stat().st_size)
           PY
       - name: Configure JDK and Android SDK
